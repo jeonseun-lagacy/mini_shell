@@ -8,6 +8,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <string.h>
+#include <signal.h>
 
 int getargs(char *cmd, char **argv) {
     int narg = 0;
@@ -298,15 +299,37 @@ void run(int i, int t_opt, char **argv){
     }
 }
 
+void my_ctrlc(int sig){
+    signal(sig, SIG_IGN);
+    printf("  ctrl_C 입력 - 쉘 종료\n");
+    exit(1);
+}
+void my_ctrlz(int sig, int flag){
+    signal(sig, SIG_IGN);
+    printf(" 쉘 일시정지..\n");
+    printf(" fg 명령으로 재개 가능..\n");
+    raise(SIGSTOP);
+    printf(" 쉘 재개..\n");
+    signal(sig, my_ctrlz);
+}
 void main() {
     char buf[256];
     char *argv[50];
     int narg;
+    int z_flag = 0;
+
+    struct sigaction ctrlc_act;
+    struct sigaction ctrlz_act;
+    ctrlc_act.sa_handler = my_ctrlc;
+    ctrlz_act.sa_handler = my_ctrlz;
+    sigaction(SIGINT, &ctrlc_act, NULL);
+    sigaction(SIGTSTP, &ctrlz_act, NULL);
 
     while (1) {
         pwd_print();
         printf(" : shell> ");
         gets(buf);
+
         narg = getargs(buf, argv);  //들어온 인자 갯수
 
         int t_opt = 0;  //task option
