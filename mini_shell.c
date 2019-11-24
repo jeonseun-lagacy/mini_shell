@@ -10,6 +10,20 @@
 #include <string.h>
 #include <signal.h>
 
+void my_ctrlc(int sig){
+    signal(sig, SIG_IGN);
+    printf("  ctrl_C 입력 - 쉘 종료\n");
+    exit(1);
+}
+void my_ctrlz(int sig, int flag){
+    signal(sig, SIG_IGN);
+    printf(" 쉘 일시정지..\n");
+    printf(" fg 명령으로 재개 가능..\n");
+    raise(SIGSTOP);
+    printf(" 쉘 재개..\n");
+    signal(sig, my_ctrlz);
+}
+
 int getargs(char *cmd, char **argv) {
     int narg = 0;
     while (*cmd) {
@@ -48,6 +62,7 @@ int checkTaskOption(char *argv){  //실행 인자 포함 여부 확인 / 0=없�
             return opt;
         }
     }
+    
     return opt;
 }
 
@@ -147,8 +162,6 @@ void my_mv(char *file, char *path){
 void my_cat(char *target){
     char buffer[512];
     int filedes;
-    ssize_t nread;
-    long total = 0;
     /* target 을 읽기 전용으로 개방 */
     if ( (filedes = open (target, O_RDONLY) ) == -1)
     {
@@ -157,6 +170,13 @@ void my_cat(char *target){
     }
     /* EOF 까지 반복하라. EOF 는 복귀값 0 에 의해 표시된다 */
     while (read (filedes, buffer, 512) > 0){
+        printf("%s", buffer);
+    }
+}
+
+void your_cat(int target){
+    char buffer[512];
+    while (read (target, buffer, 512) > 0){
         printf("%s", buffer);
     }
 }
@@ -171,7 +191,7 @@ void selectCmd(int i, char **argv){
     }
     else if(!strcmp(argv[i], "mkdir")){
         if(argv[i+1] == NULL){
-            fprintf(stderr, "A few argument..!");
+            fprintf(stderr, "A few argument..!\n");
         }
         else{
             my_mkdir(argv[i+1]);
@@ -179,7 +199,7 @@ void selectCmd(int i, char **argv){
     }
     else if(!strcmp(argv[i], "rmdir")){
         if(argv[i+1] == NULL){
-            fprintf(stderr, "A few argument..!");
+            fprintf(stderr, "A few argument..!\n");
         }
         else{
             my_rmdir(argv[i+1]);
@@ -187,7 +207,7 @@ void selectCmd(int i, char **argv){
     }
     else if(!strcmp(argv[i], "ln")){
         if(argv[i+1] == NULL || argv[i+2] == NULL){
-            fprintf(stderr, "A few argument..!");
+            fprintf(stderr, "A few argument..!\n");
         }
         else{
             my_ln(argv[i+1], argv[i+2]);
@@ -195,7 +215,7 @@ void selectCmd(int i, char **argv){
     }
     else if(!strcmp(argv[i], "cp")){
         if(argv[i+1] == NULL || argv[i+2] == NULL){
-            fprintf(stderr, "A few argument..!");
+            fprintf(stderr, "A few argument..!\n");
         }
         else{
             my_cp(argv[i+1], argv[i+2]);
@@ -203,7 +223,7 @@ void selectCmd(int i, char **argv){
     }
     else if(!strcmp(argv[i], "rm")){
         if(argv[i+1] == NULL){
-            fprintf(stderr, "A few argument..!");
+            fprintf(stderr, "A few argument..!\n");
         }
         else{
             my_rm(argv[i+1]);
@@ -211,7 +231,7 @@ void selectCmd(int i, char **argv){
     }
     else if(!strcmp(argv[i], "mv")){
         if(argv[i+1] == NULL || argv[i+2] == NULL){
-            fprintf(stderr, "A few argument..!");
+            fprintf(stderr, "A few argument..!\n");
         }
         else{
             my_mv(argv[i+1], argv[i+2]);
@@ -219,20 +239,20 @@ void selectCmd(int i, char **argv){
     }
     else if(!strcmp(argv[i], "cat")){
         if(argv[i+1] == NULL){
-            fprintf(stderr, "A few argument..!");
+            fprintf(stderr, "A few argument..!\n");
         }
         else{
-            my_cat(argv[i+1]);
+            if(0 <= atoi(argv[i+1]) && 64 >= atoi(argv[i+1])) {
+                your_cat(atoi(argv[i+1]));
+            } else{
+                my_cat(argv[i+1]);
+            }
         }
     }
-    else{
-        exit (0);
-    }
-    exit (0);
+    else{}
 }
 
 void run(int i, int t_opt, char **argv){
-    //char result[1024];
     pid_t pid;
     int fd; /* file descriptor */
     char *buf[1024];
@@ -241,7 +261,6 @@ void run(int i, int t_opt, char **argv){
     memset(buf, 0, 1024);
     pid = fork();
     if (pid == 0){  //child
-        //execvp(argv[i], argv);
         switch (t_opt){ //-1 = &, 1 = pipe, 2 = <, 3 = >
             case 1: // pipe
                 break;
@@ -287,7 +306,7 @@ void run(int i, int t_opt, char **argv){
         }
         if(!strcmp(argv[i], "cd")){
             if(argv[i+1] == NULL){
-                fprintf(stderr, "A few argument..!");
+                fprintf(stderr, "A few argument..!\n");
             }
             else{
                 my_cd(argv[i+1]);
@@ -299,24 +318,51 @@ void run(int i, int t_opt, char **argv){
     }
 }
 
-void my_ctrlc(int sig){
-    signal(sig, SIG_IGN);
-    printf("  ctrl_C 입력 - 쉘 종료\n");
-    exit(1);
+void run_pipe(int i, char **argv){
+    char buf[1024];
+    int p[2];
+    int pid;
+
+    /* open pipe */
+    if (pipe(p) == -1) {
+        perror ("pipe call failed");
+        exit(1);
+    }
+
+    pid = fork();
+    if (pid == 0) { /* child process */
+
+        close(p[0]);
+        if (dup2(p[1], STDOUT_FILENO) == -1) {
+            perror("dup2"); /* errno에 대응하는 메시지 출력됨 */
+            exit(1);
+        }
+        close(p[1]);
+        selectCmd(i, argv);
+        exit(0);
+    }
+    else if (pid > 0) {
+        wait(pid);
+        //printf("parent");
+        char *arg[1024];
+        close(p[1]);
+        //read (p[0], buf, 1024);
+        sprintf(buf, "%d", p[0]);
+        arg[0] = argv[i + 2];
+        arg[1] = buf;
+        //printf ("%s\n", buf);
+        selectCmd(0, arg);
+    }
+    else
+        perror ("fork failed");
 }
-void my_ctrlz(int sig, int flag){
-    signal(sig, SIG_IGN);
-    printf(" 쉘 일시정지..\n");
-    printf(" fg 명령으로 재개 가능..\n");
-    raise(SIGSTOP);
-    printf(" 쉘 재개..\n");
-    signal(sig, my_ctrlz);
-}
+
+
+
 void main() {
     char buf[256];
     char *argv[50];
     int narg;
-    int z_flag = 0;
 
     struct sigaction ctrlc_act;
     struct sigaction ctrlz_act;
@@ -329,7 +375,6 @@ void main() {
         pwd_print();
         printf(" : shell> ");
         gets(buf);
-
         narg = getargs(buf, argv);  //들어온 인자 갯수
 
         int t_opt = 0;  //task option
@@ -340,10 +385,14 @@ void main() {
                 printf("쉘을 종료합니다../\n");
                 exit(1);
             }
-
             int t_opt = checkTaskOption(argv[i + 1]);    //-1 = &, 1 = pipe, 2 = <, 3 = >
-            run(i, t_opt, argv);
-            if(t_opt >= 1){
+            if(t_opt == 1){
+                run_pipe(i, argv);
+                i += 2;
+            } else{
+                run(i, t_opt, argv);
+            }
+            if(t_opt > 1){  //it's optional arg
                 i += 2;
             }
         }   //end for loop
