@@ -1,4 +1,11 @@
-/* simplesh.c */
+/* mini_shell.c */
+
+/*
+* 2019. 11. 25
+* 동의대학교 컴퓨터 소프트웨어 공학과
+* 송민광, 전세운
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -262,6 +269,10 @@ void run(int i, int t_opt, char **argv){
     pid = fork();
     if (pid == 0){  //child
         switch (t_opt){ //-1 = &, 1 = pipe, 2 = <, 3 = >
+	    case -1:
+		    printf("%s가 백그라운드에서 실행 됨\n", argv[i]);
+		    selectCmd(i, argv);
+		    exit(0);
             case 1: // pipe
                 break;
             case 2: // < redirection
@@ -298,12 +309,12 @@ void run(int i, int t_opt, char **argv){
             default:    //else
                 selectCmd(i, argv);
         }
-        exit(1);
+        exit(0);
     }
     else if (pid > 0){  //parent - 백그라운드 아닐 때만 기다림
         if(t_opt >= 0){ //백그라운드가 아닐 때
             wait(pid);
-        }
+	}
         if(!strcmp(argv[i], "cd")){
             if(argv[i+1] == NULL){
                 fprintf(stderr, "A few argument..!\n");
@@ -343,21 +354,16 @@ void run_pipe(int i, char **argv){
     }
     else if (pid > 0) {
         wait(pid);
-        //printf("parent");
         char *arg[1024];
         close(p[1]);
-        //read (p[0], buf, 1024);
         sprintf(buf, "%d", p[0]);
         arg[0] = argv[i + 2];
         arg[1] = buf;
-        //printf ("%s\n", buf);
         selectCmd(0, arg);
     }
     else
         perror ("fork failed");
 }
-
-
 
 void main() {
     char buf[256];
