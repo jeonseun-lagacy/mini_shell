@@ -190,7 +190,19 @@ void your_cat(int target){
 
 void selectCmd(int i, char **argv){
     //argv 판별해서 맞는 명령 실행
-    if(!strcmp(argv[i], "ls")){
+    if(!strcmp(argv[i], "cat")){
+        if(argv[i+1] == NULL){
+            fprintf(stderr, "A few argument..!\n");
+        }
+        int arg = argv[i + 1][0] - 48;
+        if( arg == 3 ) {
+            your_cat(arg);
+        }
+        else{
+            my_cat(argv[i+1]);
+        }
+    }
+    else if(!strcmp(argv[i], "ls")){
         my_ls();
     }
     else if(!strcmp(argv[i], "pwd")){
@@ -244,18 +256,6 @@ void selectCmd(int i, char **argv){
             my_mv(argv[i+1], argv[i+2]);
         }
     }
-    else if(!strcmp(argv[i], "cat")){
-        if(argv[i+1] == NULL){
-            fprintf(stderr, "A few argument..!\n");
-        }
-        else{
-            if(0 <= atoi(argv[i+1]) && 64 >= atoi(argv[i+1])) {
-                your_cat(atoi(argv[i+1]));
-            } else{
-                my_cat(argv[i+1]);
-            }
-        }
-    }
     else{}
 }
 
@@ -268,53 +268,49 @@ void run(int i, int t_opt, char **argv){
     memset(buf, 0, 1024);
     pid = fork();
     if (pid == 0){  //child
-        switch (t_opt){ //-1 = &, 1 = pipe, 2 = <, 3 = >
-	    case -1:
-		    printf("%s가 백그라운드에서 실행 됨\n", argv[i]);
-		    selectCmd(i, argv);
-		    exit(0);
-            case 1: // pipe
-                break;
-            case 2: // < redirection
-                if ((fd = open(argv[i + 2], flags, mode)) == -1) {
-                    perror("open"); /* errno에 대응하는 메시지 출력됨*/
-                    exit(1);
-                }
-                if (dup2(fd, STDIN_FILENO) == -1) {
-                    perror("dup2"); /* errno에 대응하는 메시지 출력됨 */
-                    exit(1);
-                }
-                if (close(fd) == -1) {
-                    perror("close"); /* errno에 대응하는 메시지 출력됨*/
-                    exit(1);
-                }
-                my_cat(argv[i+2]);
-                selectCmd(i, argv);
-                exit(0);
-            case 3: // > redirection
-                if ((fd = open(argv[i+2], flags, mode)) == -1) {
-                    perror("open"); /* errno에 대응하는 메시지 출력됨*/
-                    exit(1);
-                }
-                if (dup2(fd, STDOUT_FILENO) == -1) {
-                    perror("dup2"); /* errno에 대응하는 메시지 출력됨 */
-                    exit(1);
-                }
-                if (close(fd) == -1) {
-                    perror("close"); /* errno에 대응하는 메시지 출력됨*/
-                    exit(1);
-                }
-                selectCmd(i, argv);
-                exit(0);
-            default:    //else
-                selectCmd(i, argv);
+        //-1 = &, 1 = pipe, 2 = <, 3 = >
+        if(t_opt == 0){
+            selectCmd(i, argv);
+            exit(0);
         }
-        exit(0);
+        else if(t_opt == 2){
+            if ((fd = open(argv[i + 2], flags, mode)) == -1) {
+                perror("open"); /* errno에 대응하는 메시지 출력됨*/
+                exit(1);
+            }
+            if (dup2(fd, STDIN_FILENO) == -1) {
+                perror("dup2"); /* errno에 대응하는 메시지 출력됨 */
+                exit(1);
+            }
+            if (close(fd) == -1) {
+                perror("close"); /* errno에 대응하는 메시지 출력됨*/
+                exit(1);
+            }
+            my_cat(argv[i+2]);
+            selectCmd(i, argv);
+            exit(0);
+        }
+        else if(t_opt == 3){
+            if ((fd = open(argv[i+2], flags, mode)) == -1) {
+                perror("open"); /* errno에 대응하는 메시지 출력됨*/
+                exit(1);
+            }
+            if (dup2(fd, STDOUT_FILENO) == -1) {
+                perror("dup2"); /* errno에 대응하는 메시지 출력됨 */
+                exit(1);
+            }
+            if (close(fd) == -1) {
+                perror("close"); /* errno에 대응하는 메시지 출력됨*/
+                exit(1);
+            }
+            selectCmd(i, argv);
+            exit(0);
+        }
     }
     else if (pid > 0){  //parent - 백그라운드 아닐 때만 기다림
         if(t_opt >= 0){ //백그라운드가 아닐 때
             wait(pid);
-	}
+	    }
         if(!strcmp(argv[i], "cd")){
             if(argv[i+1] == NULL){
                 fprintf(stderr, "A few argument..!\n");
@@ -342,7 +338,6 @@ void run_pipe(int i, char **argv){
 
     pid = fork();
     if (pid == 0) { /* child process */
-
         close(p[0]);
         if (dup2(p[1], STDOUT_FILENO) == -1) {
             perror("dup2"); /* errno에 대응하는 메시지 출력됨 */
@@ -377,12 +372,13 @@ void main() {
     sigaction(SIGINT, &ctrlc_act, NULL);
     sigaction(SIGTSTP, &ctrlz_act, NULL);
 
+    printf("Start mini shell\n");
+
     while (1) {
         pwd_print();
         printf(" : shell> ");
         gets(buf);
         narg = getargs(buf, argv);  //들어온 인자 갯수
-
         int t_opt = 0;  //task option
 
         for (int i = 0; i < narg; i++) {
@@ -395,7 +391,8 @@ void main() {
             if(t_opt == 1){
                 run_pipe(i, argv);
                 i += 2;
-            } else{
+            }
+            else{
                 run(i, t_opt, argv);
             }
             if(t_opt > 1){  //it's optional arg
