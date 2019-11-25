@@ -269,7 +269,12 @@ void run(int i, int t_opt, char **argv){
     pid = fork();
     if (pid == 0){  //child
         //-1 = &, 1 = pipe, 2 = <, 3 = >
-        if(t_opt == 0){
+        if(t_opt == -1){
+            printf("%s가 백그라운드로 실행...\n", argv[i]);
+            selectCmd(i, argv);
+            exit(0);
+        }
+        else if(t_opt == 0){
             selectCmd(i, argv);
             exit(0);
         }
